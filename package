@@ -4,5 +4,8 @@
   "description": "Servidor HTTP para imprimir desde Apps Script a Bluetooth Print",
   "main": "index.js",
   "type": "module",
-  "dependencies": {}
+  "dependencies": {},
+  "scripts": {
+    "start": "node index.js"
+  }
 }
