@@ -1,45 +1,64 @@
+// index.js
 import http from "http";
+import { URL } from "url";
+import fetch from "node-fetch"; // si prefieres no usar global fetch, pero en Node18+ fetch es global
 
-const PORT = 8080;
+const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
 
 const server = http.createServer(async (req, res) => {
-  console.log("Request received:", req.url);
-
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const gsUrl = url.searchParams.get("url");
-
-  if (!gsUrl) {
-    res.writeHead(400, { "Content-Type": "text/plain" });
-    return res.end("Missing ?url=");
-  }
-
   try {
-    // timeout de 8 segundos
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    console.log("Request received:", req.url);
 
-    const response = await fetch(gsUrl, {
-      method: "GET",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Fly.io Proxy)",
-        "Accept": "*/*"
-      },
-      signal: controller.signal
-    });
+    // Construir URL segura usando host de la petición
+    const base = `http://${req.headers.host}`;
+    const url = new URL(req.url, base);
+    const gsUrl = url.searchParams.get("url");
 
-    clearTimeout(timeout);
+    if (!gsUrl) {
+      res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+      return res.end("Missing ?url= parameter");
+    }
 
-    const text = await response.text();
+    // Validación simple: debe ser https:// (Apps Script) o http(s)
+    if (!/^https?:\/\//i.test(gsUrl)) {
+      res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+      return res.end("Invalid url parameter");
+    }
 
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(text);
+    console.log("Proxy fetching:", gsUrl);
+    const response = await fetch(gsUrl, { redirect: "follow", timeout: 15000 });
+    const contentType = response.headers.get("content-type") || "text/plain";
+    const data = await response.text();
+
+    // Si la respuesta ya es JSON (por ejemplo tu Apps Script devuelve JSON), devolvemos JSON.
+    // Si no es JSON, la devolvemos como texto (la app Bluetooth espera JSON válido).
+    if (/application\/json/i.test(contentType) || isJsonString(data)) {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(data);
+    } else {
+      // intenta devolver como JSON array si tu Apps Script devuelve arreglo, sino devolvemos texto
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      // Si no es JSON, envolver en un array con un texto de debug no ideal para producción
+      res.end(JSON.stringify([{ type: 0, content: data }]));
+    }
 
   } catch (err) {
-    res.writeHead(500, { "Content-Type": "text/plain" });
+    console.error("Proxy error:", err);
+    res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
     res.end("Fetch error: " + err.message);
   }
 });
 
-server.listen(PORT, () => {
-  console.log("Server running on HTTP port " + PORT);
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on HTTP port ${PORT}`);
 });
+
+function isJsonString(str) {
+  try {
+    JSON.parse(str);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
