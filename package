@@ -1,11 +1,11 @@
 {
   "name": "http-proxy-print",
   "version": "1.0.0",
-  "description": "Servidor HTTP para imprimir desde Apps Script a Bluetooth Print",
+  "description": "Servidor HTTP proxy para Bluetooth Print (Fly.io)",
   "main": "index.js",
   "type": "module",
-  "dependencies": {},
   "scripts": {
     "start": "node index.js"
-  }
+  },
+  "dependencies": {}
 }
